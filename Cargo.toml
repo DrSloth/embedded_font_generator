@@ -1,0 +1,21 @@
+[package]
+name = "embedded_font_generator"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+build_bin = ["xflags"]
+
+[dependencies]
+zune-png = "0.2.0"
+xflags = { version = "0.3.1", optional = true }
+thiserror = "1.0.40"
+
+[profile.dev.package.zune-png]
+opt-level = 3
+
+[[bin]]
+name = "embedded_font_generator"
+path = "src/tools/generate.rs"
+required-features = ["build_bin"]
+
