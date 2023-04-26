@@ -18,6 +18,7 @@ pub type Result<T, E = GenerationError> = std::result::Result<T, E>;
 pub fn generate_monochromatic(
     data: &[u8],
     font_mode: FontMode,
+    bit_flow: BitFlow,
     out: &mut impl Write,
 ) -> crate::Result<()> {
     let decoded = imagedecode::MonochromaticColorIter::new(data, font_mode)?;
@@ -27,8 +28,16 @@ pub fn generate_monochromatic(
     for pix in decoded {
         #[allow(clippy::arithmetic_side_effects)] // Wrongly flagged already fixed in 1.70
         {
-            cur_byte <<= 1u32;
-            cur_byte |= u8::from(pix);
+            match bit_flow {
+                BitFlow::Mtl => {
+                    cur_byte <<= 1u32;
+                    cur_byte |= u8::from(pix);
+                }
+                BitFlow::Ltm => {
+                    cur_byte >>= 1u32;
+                    cur_byte |= u8::from(pix) << 7i32;
+                }
+            }
         }
         if let Some(v) = i.checked_sub(1) {
             i = v;
@@ -72,3 +81,30 @@ impl FromStr for FontMode {
 #[derive(Debug, thiserror::Error)]
 #[error("Unsuported font mode: {0}")]
 pub struct FontModeParseError(String);
+
+/// In what direction the bits inside a byte flow in a monochromatic font.
+#[derive(Clone, Copy, Debug, Default)]
+pub enum BitFlow {
+    /// Most significant bit to least significant bit
+    #[default]
+    Mtl,
+    /// Least significant bit most significant bit
+    Ltm,
+}
+
+impl FromStr for BitFlow {
+    type Err = BitFlowParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "mtl" | "MTL" | "Mtl" | "m2l" | "Most" | "big" | "Big" => Ok(Self::Mtl),
+            "ltm" | "LTM" | "Ltm" | "l2m" | "Least" | "small" | "Small" => Ok(Self::Ltm),
+            s => Err(BitFlowParseError(s.to_owned())),
+        }
+    }
+}
+
+/// A bit flow was tried to be parsed that doesn't exist
+#[derive(Clone, Debug, thiserror::Error)]
+#[error("Unsupported byte flow: {0}")]
+pub struct BitFlowParseError(String);

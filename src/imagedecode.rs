@@ -99,9 +99,13 @@ fn calc_char_size(font_mode: FontMode, width: usize, height: usize) -> usize {
     match font_mode {
         FontMode::Row => width.wrapping_mul(height),
         FontMode::ByteColumn => {
-            // 8 - (height % 8) + height to calculate next multiple of 8 as height
-            let height = 8usize.wrapping_sub(height % 8).wrapping_add(height);
-            width.wrapping_mul(height)
+            if height % 8 == 0 {
+                width.wrapping_mul(height)
+            } else {
+                // 8 - (height % 8) + height to calculate next multiple of 8 as height
+                let height = 8usize.wrapping_sub(height % 8).wrapping_add(height);
+                width.wrapping_mul(height)
+            }
         }
     }
 }
@@ -345,5 +349,19 @@ impl SupportedColorSpace {
             Self::Bgr => ColorSpace::BGR.has_alpha(),
             Self::Bgra => ColorSpace::BGRA.has_alpha(),
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    /// Prevent regression of wrong size calculations
+    #[test]
+    fn calc_char_size_test() {
+        assert_eq!(calc_char_size(FontMode::Row, 10, 16), 10 * 16);
+        assert_eq!(calc_char_size(FontMode::Row, 10, 20), 10 * 20);
+        assert_eq!(calc_char_size(FontMode::ByteColumn, 10, 16), 10 * 16);
+        assert_eq!(calc_char_size(FontMode::ByteColumn, 10, 20), 10 * 24);
     }
 }

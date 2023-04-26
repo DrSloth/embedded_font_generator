@@ -7,7 +7,7 @@ use std::{
     str::FromStr,
 };
 
-use embedded_font_generator::{FontMode, GenerationError};
+use embedded_font_generator::{BitFlow, FontMode, GenerationError};
 
 xflags::xflags! {
     /// Tool to convert png images to a simple bitmap font format readable in embedded software.
@@ -20,6 +20,11 @@ xflags::xflags! {
         /// column-byte: 8 Pixel Columns are read from left to right and then top to bottom,
         ///              the data is byte aligned in multiples of 8.
         optional -m, --mode mode: FontMode
+        /// The flow in which the bits inside a byte flow
+        ///
+        /// big: The first read pixel is the most significant bit
+        /// small: The first read pixel is the least significant bit
+        optional -f, --flow flow: BitFlow
         /// Generate a complete directory
         cmd generate-dir {
             /// Path to the directory
@@ -51,20 +56,21 @@ fn main() {
 /// Run the command with the given arguments
 fn run(args: App) -> embedded_font_generator::Result<()> {
     let font_mode = args.mode.unwrap_or_default();
+    let bit_flow = args.flow.unwrap_or_default();
     match args.subcommand {
         AppCmd::GenerateFile(GenerateFile { file_path }) => match args.output {
             Some(out_path) => {
                 let f = File::create(&out_path).map_err(GenerationError::IoError)?;
-                generate_file(&file_path, font_mode, &mut BufWriter::new(f))
+                generate_file(&file_path, font_mode, bit_flow, &mut BufWriter::new(f))
             }
-            None => generate_file(&file_path, font_mode, &mut io::stdout().lock()),
+            None => generate_file(&file_path, font_mode, bit_flow, &mut io::stdout().lock()),
         },
         AppCmd::GenerateDir(GenerateDir { dir_path }) => match args.output {
             Some(out_path) => {
                 let f = File::create(&out_path).map_err(GenerationError::IoError)?;
-                generate_dir(&dir_path, font_mode, &mut BufWriter::new(f))
+                generate_dir(&dir_path, font_mode, bit_flow, &mut BufWriter::new(f))
             }
-            None => generate_dir(&dir_path, font_mode, &mut io::stdout().lock()),
+            None => generate_dir(&dir_path, font_mode, bit_flow, &mut io::stdout().lock()),
         },
         AppCmd::Dump(Dump { format, file_path }) => {
             let bytes = fs::read(file_path)?;
@@ -97,17 +103,19 @@ fn run(args: App) -> embedded_font_generator::Result<()> {
 fn generate_file(
     file_path: &Path,
     font_mode: FontMode,
+    bit_flow: BitFlow,
     mut out: &mut dyn Write,
 ) -> embedded_font_generator::Result<()> {
     let data = fs::read(file_path).map_err(GenerationError::IoError)?;
 
-    embedded_font_generator::generate_monochromatic(&data, font_mode, &mut out)
+    embedded_font_generator::generate_monochromatic(&data, font_mode, bit_flow, &mut out)
 }
 
 /// Generate all images in a directory as font
 fn generate_dir(
     dir_path: &Path,
     font_mode: FontMode,
+    bit_flow: BitFlow,
     out: &mut dyn Write,
 ) -> embedded_font_generator::Result<()> {
     let dir_ents = fs::read_dir(dir_path)?;
@@ -115,7 +123,7 @@ fn generate_dir(
     entries.sort_unstable_by_key(|ent| ent.file_name());
     for ent in entries {
         eprintln!("Generating for {}", ent.path().display());
-        generate_file(&ent.path(), font_mode, out)?;
+        generate_file(&ent.path(), font_mode, bit_flow, out)?;
     }
 
     Ok(())
